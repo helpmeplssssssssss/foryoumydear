@@ -29,7 +29,6 @@
     cursor: crosshair;
   }
 
-  /* Первый экран: чёрный фон, надпись и красная кнопка */
   #startScreen {
     position: relative;
     z-index: 2;
@@ -92,7 +91,6 @@
     }
   }
 
-  /* Игровая зона */
   #gameArea {
     display: none;
     flex-direction: column;
@@ -128,7 +126,6 @@
     -webkit-touch-callout: none;
   }
 
-  /* Скример */
   #screamer {
     display: none;
     position: fixed;
@@ -248,7 +245,6 @@ const levels = [
   ]
 ];
 
-// Сообщения для каждого уровня
 const levelTexts = [
   'Пройди лабиринт',
   'Будь внимательнее.',
@@ -333,7 +329,9 @@ function drawPlayer(x, y) {
   mazeCtx.shadowBlur = 0;
 }
 
-/* ============ ДВИЖЕНИЕ (только на 1 клетку) ============ */
+/* ============ ДВИЖЕНИЕ ШАРИКА ============ */
+/* ВАЖНО: двигаемся ТОЛЬКО по вызову из drag-обработчиков.
+   Никаких кликов по клеткам, никакого BFS/автопути. */
 function movePlayer(dr, dc) {
   if (levelFinished) return false;
   const nr = player.row + dr;
@@ -342,10 +340,18 @@ function movePlayer(dr, dc) {
   const target = grid[nr][nc];
   if (target === 1) return false;
 
-  const oldX = player.col * cellSize;
-  const oldY = player.row * cellSize;
+  // Стираем старую позицию
   mazeCtx.fillStyle = '#000';
-  mazeCtx.fillRect(oldX, oldY, cellSize, cellSize);
+  mazeCtx.fillRect(player.col * cellSize, player.row * cellSize, cellSize, cellSize);
+
+  // Восстанавливаем визуал старой клетки (если это была не стена и не финиш)
+  const oldVal = grid[player.row][player.col];
+  if (oldVal === 1) {
+    mazeCtx.fillStyle = '#0a3a0a';
+    mazeCtx.fillRect(player.col * cellSize, player.row * cellSize, cellSize, cellSize);
+    mazeCtx.strokeStyle = '#0f0';
+    mazeCtx.strokeRect(player.col * cellSize + 0.5, player.row * cellSize + 0.5, cellSize - 1, cellSize - 1);
+  }
 
   player.row = nr;
   player.col = nc;
@@ -364,11 +370,11 @@ function movePlayer(dr, dc) {
     return true;
   }
 
-  drawMaze();
+  drawPlayer(player.col * cellSize, player.row * cellSize);
   return true;
 }
 
-/* ============ КЛАВИАТУРА ============ */
+/* ============ КЛАВИАТУРА (ПК) ============ */
 document.addEventListener('keydown', (e) => {
   if (gameArea.style.display !== 'flex') return;
   switch (e.key) {
@@ -392,71 +398,57 @@ function clientToCell(clientX, clientY) {
   };
 }
 
-/* ============ НЕОТРЫВНОЕ ВЕДЕНИЕ ТОЧКИ ============ */
-/*
-  Логика:
-  - Игрок нажимает на точку (шарик) и, не отпуская, ведёт палец/мышь.
-  - Движение происходит только когда палец входит в новую клетку.
-  - Если палец отпущен — шарик больше не двигается, тап по другим клеткам ничего не делает.
-  - Игрок может начать вести, только если при касании попал в свою текущую клетку (шарик).
-*/
+/* ============ ЛОГИКА "ВЕДЕНИЯ" ШАРИКА ============ */
+let isDraggingPlayer = false;
 
-let isDraggingPlayer = false;       // сейчас ведём точку
-let lastTouchCell = { row: -1, col: -1 };
-
-function beginDragAt(clientX, clientY) {
+// Начать ведение можно ТОЛЬКО если касание началось на клетке шарика
+function beginDrag(clientX, clientY) {
+  if (levelFinished) return;
   const cell = clientToCell(clientX, clientY);
-  // Можно начать вести только если коснулись своей клетки
   if (cell.row === player.row && cell.col === player.col) {
     isDraggingPlayer = true;
-    lastTouchCell = { row: player.row, col: player.col };
-    return true;
   }
-  return false;
 }
 
-function dragTo(clientX, clientY) {
+// Ведение: двигаемся по одной клетке в сторону пальца, если это соседняя клетка
+function continueDrag(clientX, clientY) {
   if (!isDraggingPlayer || levelFinished) return;
   const cell = clientToCell(clientX, clientY);
 
-  // Если палец вышел за пределы поля — ничего не делаем
+  // Палец вне поля — игнорируем
   if (cell.row < 0 || cell.col < 0 || cell.row >= grid.length || cell.col >= grid[0].length) return;
 
-  // Та же клетка — ничего
-  if (cell.row === player.row && cell.col === player.col) return;
-
-  // Пытаемся двигаться по одной клетке к пальцу, но только если это соседняя клетка
   const dr = cell.row - player.row;
   const dc = cell.col - player.col;
 
-  // Если палец ушёл далеко (быстрый свайп) — делаем шаг в сторону доминирующего направления
-  if (Math.abs(dr) > 1 || Math.abs(dc) > 1) {
+  // Если палец на клетке шарика — ничего
+  if (dr === 0 && dc === 0) return;
+
+  // Соседняя клетка — идём туда
+  if (Math.abs(dr) <= 1 && Math.abs(dc) <= 1) {
+    // предпочтение доминирующей оси
     if (Math.abs(dr) >= Math.abs(dc)) {
-      movePlayer(Math.sign(dr), 0);
+      if (!movePlayer(Math.sign(dr), 0)) {
+        movePlayer(0, Math.sign(dc));
+      }
     } else {
-      movePlayer(0, Math.sign(dc));
+      if (!movePlayer(0, Math.sign(dc))) {
+        movePlayer(Math.sign(dr), 0);
+      }
     }
     return;
   }
 
-  // Соседняя клетка — идём туда (если не стена)
-  if (dr !== 0 || dc !== 0) {
-    // предпочтение той оси, где больше смещение
-    if (Math.abs(dr) >= Math.abs(dc)) {
-      if (!movePlayer(dr, 0)) {
-        movePlayer(0, dc);
-      }
-    } else {
-      if (!movePlayer(0, dc)) {
-        movePlayer(dr, 0);
-      }
-    }
+  // Палец далеко (быстрый свайп) — один шаг в доминирующем направлении
+  if (Math.abs(dr) >= Math.abs(dc)) {
+    movePlayer(Math.sign(dr), 0);
+  } else {
+    movePlayer(0, Math.sign(dc));
   }
 }
 
 function endDrag() {
   isDraggingPlayer = false;
-  lastTouchCell = { row: -1, col: -1 };
 }
 
 /* ============ TOUCH ============ */
@@ -464,7 +456,7 @@ mazeCanvas.addEventListener('touchstart', (e) => {
   if (e.touches.length !== 1) return;
   e.preventDefault();
   const t = e.touches[0];
-  beginDragAt(t.clientX, t.clientY);
+  beginDrag(t.clientX, t.clientY);
 }, { passive: false });
 
 mazeCanvas.addEventListener('touchmove', (e) => {
@@ -472,7 +464,7 @@ mazeCanvas.addEventListener('touchmove', (e) => {
   e.preventDefault();
   if (!isDraggingPlayer) return;
   const t = e.touches[0];
-  dragTo(t.clientX, t.clientY);
+  continueDrag(t.clientX, t.clientY);
 }, { passive: false });
 
 mazeCanvas.addEventListener('touchend', (e) => {
@@ -487,12 +479,12 @@ mazeCanvas.addEventListener('touchcancel', () => {
 /* ============ МЫШЬ ============ */
 mazeCanvas.addEventListener('mousedown', (e) => {
   e.preventDefault();
-  beginDragAt(e.clientX, e.clientY);
+  beginDrag(e.clientX, e.clientY);
 });
 
 window.addEventListener('mousemove', (e) => {
   if (!isDraggingPlayer) return;
-  dragTo(e.clientX, e.clientY);
+  continueDrag(e.clientX, e.clientY);
 });
 
 window.addEventListener('mouseup', () => {
