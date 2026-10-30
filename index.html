@@ -421,32 +421,28 @@ function clientToCell(clientX, clientY) {
 /* ============ ЛОГИКА "ВЕДЕНИЯ" ШАРИКА ============ */
 let isDraggingPlayer = false;
 
-// Начать ведение можно ТОЛЬКО если касание началось на клетке шарика
 function beginDrag(clientX, clientY) {
   if (levelFinished) return;
   const cell = clientToCell(clientX, clientY);
-  if (cell.row === player.row && cell.col === player.col) {
+  const dr = Math.abs(cell.row - player.row);
+  const dc = Math.abs(cell.col - player.col);
+  if (dr <= 1 && dc <= 1) {
     isDraggingPlayer = true;
   }
 }
 
-// Ведение: двигаемся по одной клетке в сторону пальца, если это соседняя клетка
 function continueDrag(clientX, clientY) {
   if (!isDraggingPlayer || levelFinished) return;
   const cell = clientToCell(clientX, clientY);
 
-  // Палец вне поля — игнорируем
   if (cell.row < 0 || cell.col < 0 || cell.row >= grid.length || cell.col >= grid[0].length) return;
 
   const dr = cell.row - player.row;
   const dc = cell.col - player.col;
 
-  // Если палец на клетке шарика — ничего
   if (dr === 0 && dc === 0) return;
 
-  // Соседняя клетка — идём туда
   if (Math.abs(dr) <= 1 && Math.abs(dc) <= 1) {
-    // предпочтение доминирующей оси
     if (Math.abs(dr) >= Math.abs(dc)) {
       if (!movePlayer(Math.sign(dr), 0)) {
         movePlayer(0, Math.sign(dc));
@@ -459,7 +455,6 @@ function continueDrag(clientX, clientY) {
     return;
   }
 
-  // Палец далеко (быстрый свайп) — один шаг в доминирующем направлении
   if (Math.abs(dr) >= Math.abs(dc)) {
     movePlayer(Math.sign(dr), 0);
   } else {
@@ -471,28 +466,41 @@ function endDrag() {
   isDraggingPlayer = false;
 }
 
-/* ============ TOUCH ============ */
-mazeCanvas.addEventListener('touchstart', (e) => {
+// Проверка: точка внутри канваса?
+function isInsideMaze(clientX, clientY) {
+  const rect = mazeCanvas.getBoundingClientRect();
+  return clientX >= rect.left && clientX <= rect.right &&
+         clientY >= rect.top && clientY <= rect.bottom;
+}
+
+/* ============ TOUCH (только для лабиринта) ============ */
+document.addEventListener('touchstart', (e) => {
+  // Работаем только когда игра активна
+  if (gameArea.style.display !== 'flex') return;
   if (e.touches.length !== 1) return;
-  e.preventDefault();
+
   const t = e.touches[0];
+  // Только если касание внутри канваса лабиринта
+  if (!isInsideMaze(t.clientX, t.clientY)) return;
+
+  e.preventDefault();
   beginDrag(t.clientX, t.clientY);
 }, { passive: false });
 
-mazeCanvas.addEventListener('touchmove', (e) => {
-  if (e.touches.length !== 1) return;
+document.addEventListener('touchmove', (e) => {
+  if (!isDraggingPlayer || e.touches.length !== 1) return;
   e.preventDefault();
-  if (!isDraggingPlayer) return;
   const t = e.touches[0];
   continueDrag(t.clientX, t.clientY);
 }, { passive: false });
 
-mazeCanvas.addEventListener('touchend', (e) => {
+document.addEventListener('touchend', (e) => {
+  if (!isDraggingPlayer) return;
   e.preventDefault();
   endDrag();
 }, { passive: false });
 
-mazeCanvas.addEventListener('touchcancel', () => {
+document.addEventListener('touchcancel', () => {
   endDrag();
 });
 
@@ -519,11 +527,8 @@ function startGame() {
   loadLevel(0);
 }
 
+// Только click — работает и на телефоне, и на ПК
 redButton.addEventListener('click', startGame);
-redButton.addEventListener('touchstart', (e) => {
-  e.preventDefault();
-  startGame();
-}, { passive: false });
 
 /* ============ СКРИМЕР ============ */
 function showScreamer() {
