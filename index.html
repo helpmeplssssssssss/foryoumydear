@@ -26,7 +26,6 @@
     align-items: center;
     touch-action: none;
     overscroll-behavior: none;
-    cursor: crosshair;
   }
 
   #startScreen {
@@ -48,16 +47,6 @@
     letter-spacing: 4px;
     text-align: center;
     padding: 0 20px;
-    animation: flicker 3s infinite;
-  }
-
-  @keyframes flicker {
-    0%, 100% { opacity: 1; }
-    92% { opacity: 1; }
-    93% { opacity: 0.3; }
-    94% { opacity: 1; }
-    96% { opacity: 0.5; }
-    97% { opacity: 1; }
   }
 
   #redButton {
@@ -117,7 +106,6 @@
 
   #mazeCanvas {
     border: 2px solid #0f0;
-    box-shadow: 0 0 25px rgba(0,255,0,0.6);
     background: #000;
     display: block;
     touch-action: none;
@@ -277,19 +265,20 @@ function loadLevel(index) {
 
   mazeCanvas.width = grid[0].length * cellSize;
   mazeCanvas.height = grid.length * cellSize;
-
   mazeCanvas.style.width = mazeCanvas.width + 'px';
   mazeCanvas.style.height = mazeCanvas.height + 'px';
 
   levelMessage.textContent = levelTexts[index];
-
   drawMaze();
 }
 
+/* ============ ОТРИСОВКА — БЕЗ СВЕЧЕНИЯ ============ */
 function drawMaze() {
-  // Сбрасываем любые эффекты перед отрисовкой
+  // Жёстко сбрасываем все эффекты canvas
   mazeCtx.shadowBlur = 0;
   mazeCtx.shadowColor = 'transparent';
+  mazeCtx.shadowOffsetX = 0;
+  mazeCtx.shadowOffsetY = 0;
 
   mazeCtx.fillStyle = '#000';
   mazeCtx.fillRect(0, 0, mazeCanvas.width, mazeCanvas.height);
@@ -305,7 +294,7 @@ function drawMaze() {
         mazeCtx.lineWidth = 1;
         mazeCtx.strokeRect(x + 0.5, y + 0.5, cellSize - 1, cellSize - 1);
       } else if (val === 3) {
-        // Финиш — просто зелёный квадрат, БЕЗ свечения
+        // Финиш — плоский зелёный квадрат, без свечения
         mazeCtx.fillStyle = '#0f0';
         mazeCtx.fillRect(x + cellSize * 0.2, y + cellSize * 0.2, cellSize * 0.6, cellSize * 0.6);
       }
@@ -315,9 +304,11 @@ function drawMaze() {
 }
 
 function drawPlayer(x, y) {
-  // Гарантированно без свечения
+  // Ещё раз сбрасываем — на случай, если что-то выставило эффекты
   mazeCtx.shadowBlur = 0;
   mazeCtx.shadowColor = 'transparent';
+  mazeCtx.shadowOffsetX = 0;
+  mazeCtx.shadowOffsetY = 0;
 
   const cx = x + cellSize / 2;
   const cy = y + cellSize / 2;
@@ -329,6 +320,7 @@ function drawPlayer(x, y) {
   mazeCtx.fill();
 }
 
+/* ============ ДВИЖЕНИЕ ============ */
 function movePlayer(dr, dc) {
   if (levelFinished) return false;
   const nr = player.row + dr;
@@ -337,8 +329,6 @@ function movePlayer(dr, dc) {
   const target = grid[nr][nc];
   if (target === 1) return false;
 
-  // Полностью перерисовываем весь лабиринт — так гарантированно
-  // не остаётся ни следа от старой позиции шарика
   player.row = nr;
   player.col = nc;
 
@@ -356,45 +346,12 @@ function movePlayer(dr, dc) {
     return true;
   }
 
+  // Полная перерисовка — гарантирует отсутствие следов
   drawMaze();
   return true;
 }
 
-  // Стираем старую позицию
-  mazeCtx.fillStyle = '#000';
-  mazeCtx.fillRect(player.col * cellSize, player.row * cellSize, cellSize, cellSize);
-
-  // Восстанавливаем визуал старой клетки (если это была не стена и не финиш)
-  const oldVal = grid[player.row][player.col];
-  if (oldVal === 1) {
-    mazeCtx.fillStyle = '#0a3a0a';
-    mazeCtx.fillRect(player.col * cellSize, player.row * cellSize, cellSize, cellSize);
-    mazeCtx.strokeStyle = '#0f0';
-    mazeCtx.strokeRect(player.col * cellSize + 0.5, player.row * cellSize + 0.5, cellSize - 1, cellSize - 1);
-  }
-
-  player.row = nr;
-  player.col = nc;
-
-  if (target === 3) {
-    levelFinished = true;
-    drawMaze();
-    setTimeout(() => {
-      currentLevel++;
-      if (currentLevel < levels.length) {
-        loadLevel(currentLevel);
-      } else {
-        showScreamer();
-      }
-    }, 200);
-    return true;
-  }
-
-  drawPlayer(player.col * cellSize, player.row * cellSize);
-  return true;
-}
-
-/* ============ КЛАВИАТУРА (ПК) ============ */
+/* ============ КЛАВИАТУРА ============ */
 document.addEventListener('keydown', (e) => {
   if (gameArea.style.display !== 'flex') return;
   switch (e.key) {
@@ -418,7 +375,7 @@ function clientToCell(clientX, clientY) {
   };
 }
 
-/* ============ ЛОГИКА "ВЕДЕНИЯ" ШАРИКА ============ */
+/* ============ ВЕДЕНИЕ ШАРИКА ============ */
 let isDraggingPlayer = false;
 
 function beginDrag(clientX, clientY) {
@@ -426,6 +383,7 @@ function beginDrag(clientX, clientY) {
   const cell = clientToCell(clientX, clientY);
   const dr = Math.abs(cell.row - player.row);
   const dc = Math.abs(cell.col - player.col);
+  // Можно начать вести, если коснулся шарика или соседней клетки
   if (dr <= 1 && dc <= 1) {
     isDraggingPlayer = true;
   }
@@ -439,7 +397,6 @@ function continueDrag(clientX, clientY) {
 
   const dr = cell.row - player.row;
   const dc = cell.col - player.col;
-
   if (dr === 0 && dc === 0) return;
 
   if (Math.abs(dr) <= 1 && Math.abs(dc) <= 1) {
@@ -466,22 +423,15 @@ function endDrag() {
   isDraggingPlayer = false;
 }
 
-// Проверка: точка внутри канваса?
-function isInsideMaze(clientX, clientY) {
-  const rect = mazeCanvas.getBoundingClientRect();
-  return clientX >= rect.left && clientX <= rect.right &&
-         clientY >= rect.top && clientY <= rect.bottom;
-}
-
-/* ============ TOUCH (только для лабиринта) ============ */
+/* ============ TOUCH ============ */
 document.addEventListener('touchstart', (e) => {
-  // Работаем только когда игра активна
   if (gameArea.style.display !== 'flex') return;
   if (e.touches.length !== 1) return;
 
   const t = e.touches[0];
-  // Только если касание внутри канваса лабиринта
-  if (!isInsideMaze(t.clientX, t.clientY)) return;
+  const rect = mazeCanvas.getBoundingClientRect();
+  if (t.clientX < rect.left || t.clientX > rect.right ||
+      t.clientY < rect.top  || t.clientY > rect.bottom) return;
 
   e.preventDefault();
   beginDrag(t.clientX, t.clientY);
@@ -500,9 +450,7 @@ document.addEventListener('touchend', (e) => {
   endDrag();
 }, { passive: false });
 
-document.addEventListener('touchcancel', () => {
-  endDrag();
-});
+document.addEventListener('touchcancel', endDrag);
 
 /* ============ МЫШЬ ============ */
 mazeCanvas.addEventListener('mousedown', (e) => {
@@ -515,20 +463,15 @@ window.addEventListener('mousemove', (e) => {
   continueDrag(e.clientX, e.clientY);
 });
 
-window.addEventListener('mouseup', () => {
-  endDrag();
-});
+window.addEventListener('mouseup', endDrag);
 
-/* ============ СТАРТ ============ */
-function startGame() {
+/* ============ СТАРТ — обычный click, работает на ПК и телефоне ============ */
+redButton.addEventListener('click', () => {
   startScreen.style.display = 'none';
   gameArea.style.display = 'flex';
   currentLevel = 0;
   loadLevel(0);
-}
-
-// Только click — работает и на телефоне, и на ПК
-redButton.addEventListener('click', startGame);
+});
 
 /* ============ СКРИМЕР ============ */
 function showScreamer() {
@@ -556,7 +499,6 @@ window.addEventListener('resize', () => {
   }
 });
 
-/* ============ ЗАЩИТА ОТ ЖЕСТОВ ============ */
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('contextmenu', (e) => {
   if (e.target === mazeCanvas) e.preventDefault();
