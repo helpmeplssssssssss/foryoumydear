@@ -19,7 +19,7 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
-    position: fixed;        
+    position: fixed;
     top: 0; left: 0;
     display: flex;
     justify-content: center;
@@ -29,14 +29,36 @@
     cursor: crosshair;
   }
 
+  /* Первый экран: чёрный фон, надпись и красная кнопка */
   #startScreen {
     position: relative;
     z-index: 2;
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
     width: 100%;
     height: 100%;
+    gap: 50px;
+  }
+
+  #startTitle {
+    color: #ff0000;
+    text-shadow: 0 0 10px #ff0000, 0 0 25px #ff0000;
+    font-size: clamp(1.4rem, 6vw, 2.4rem);
+    letter-spacing: 4px;
+    text-align: center;
+    padding: 0 20px;
+    animation: flicker 3s infinite;
+  }
+
+  @keyframes flicker {
+    0%, 100% { opacity: 1; }
+    92% { opacity: 1; }
+    93% { opacity: 0.3; }
+    94% { opacity: 1; }
+    96% { opacity: 0.5; }
+    97% { opacity: 1; }
   }
 
   #redButton {
@@ -70,6 +92,7 @@
     }
   }
 
+  /* Игровая зона */
   #gameArea {
     display: none;
     flex-direction: column;
@@ -84,12 +107,14 @@
     background: #000;
   }
 
-  #levelInfo {
+  #levelMessage {
     color: #ff0000;
-    text-shadow: 0 0 8px #ff0000;
-    margin-bottom: 10px;
-    font-size: clamp(0.9rem, 3.5vw, 1.2rem);
+    text-shadow: 0 0 10px #ff0000;
+    margin-bottom: 20px;
+    font-size: clamp(1rem, 4.5vw, 1.6rem);
     letter-spacing: 3px;
+    text-align: center;
+    padding: 0 15px;
   }
 
   #mazeCanvas {
@@ -103,16 +128,7 @@
     -webkit-touch-callout: none;
   }
 
-  #hint {
-    margin-top: 12px;
-    color: #0f0;
-    font-size: clamp(0.7rem, 2.8vw, 0.85rem);
-    opacity: 0.7;
-    letter-spacing: 2px;
-    text-align: center;
-    padding: 0 10px;
-  }
-
+  /* Скример */
   #screamer {
     display: none;
     position: fixed;
@@ -161,13 +177,13 @@
 <body>
 
 <div id="startScreen">
+  <div id="startTitle">Пройди лабиринт</div>
   <button id="redButton" aria-label="Start"></button>
 </div>
 
 <div id="gameArea">
-  <div id="levelInfo">LEVEL 1 / 3</div>
+  <div id="levelMessage"></div>
   <canvas id="mazeCanvas"></canvas>
-  <div id="hint"></div>
 </div>
 
 <div id="screamer">
@@ -177,15 +193,16 @@
 </div>
 
 <script>
+/* ============ ЭЛЕМЕНТЫ ============ */
 const startScreen = document.getElementById('startScreen');
 const gameArea = document.getElementById('gameArea');
 const redButton = document.getElementById('redButton');
 const mazeCanvas = document.getElementById('mazeCanvas');
 const mazeCtx = mazeCanvas.getContext('2d');
-const levelInfo = document.getElementById('levelInfo');
-const hint = document.getElementById('hint');
+const levelMessage = document.getElementById('levelMessage');
 const screamer = document.getElementById('screamer');
 
+/* ============ ЛАБИРИНТЫ ============ */
 const levels = [
   [
     [1,1,1,1,1,1,1,1,1,1,1,1,1],
@@ -231,12 +248,20 @@ const levels = [
   ]
 ];
 
+// Сообщения для каждого уровня
+const levelTexts = [
+  'Пройди лабиринт',
+  'Будь внимательнее.',
+  'COTTON ждет тебя. Удачи.'
+];
+
 let currentLevel = 0;
 let grid = [];
 let player = { row: 0, col: 0 };
 let cellSize = 40;
 let levelFinished = false;
 
+/* ============ ЗАГРУЗКА УРОВНЯ ============ */
 function loadLevel(index) {
   levelFinished = false;
   grid = levels[index].map(r => [...r]);
@@ -247,7 +272,7 @@ function loadLevel(index) {
   }
 
   const availableW = Math.min(window.innerWidth * 0.92, 720);
-  const availableH = Math.min(window.innerHeight * 0.72, 640);
+  const availableH = Math.min(window.innerHeight * 0.65, 600);
   cellSize = Math.min(
     Math.floor(availableW / grid[0].length),
     Math.floor(availableH / grid.length)
@@ -260,15 +285,12 @@ function loadLevel(index) {
   mazeCanvas.style.width = mazeCanvas.width + 'px';
   mazeCanvas.style.height = mazeCanvas.height + 'px';
 
-  levelInfo.textContent = `LEVEL ${index + 1} / 3`;
-  hint.textContent = index === 0
-    ? 'Свайпай или тапай по клетке'
-    : index === 1 ? 'Веди пальцем. Стены не проходимы.'
-    : 'ПОСЛЕДНИЙ УРОВЕНЬ. УДАЧИ.';
+  levelMessage.textContent = levelTexts[index];
 
   drawMaze();
 }
 
+/* ============ ОТРИСОВКА ============ */
 function drawMaze() {
   mazeCtx.fillStyle = '#000';
   mazeCtx.fillRect(0, 0, mazeCanvas.width, mazeCanvas.height);
@@ -311,13 +333,14 @@ function drawPlayer(x, y) {
   mazeCtx.shadowBlur = 0;
 }
 
+/* ============ ДВИЖЕНИЕ (только на 1 клетку) ============ */
 function movePlayer(dr, dc) {
-  if (levelFinished) return;
+  if (levelFinished) return false;
   const nr = player.row + dr;
   const nc = player.col + dc;
-  if (nr < 0 || nr >= grid.length || nc < 0 || nc >= grid[0].length) return;
+  if (nr < 0 || nr >= grid.length || nc < 0 || nc >= grid[0].length) return false;
   const target = grid[nr][nc];
-  if (target === 1) return;
+  if (target === 1) return false;
 
   const oldX = player.col * cellSize;
   const oldY = player.row * cellSize;
@@ -338,12 +361,14 @@ function movePlayer(dr, dc) {
         showScreamer();
       }
     }, 200);
-    return;
+    return true;
   }
 
   drawMaze();
+  return true;
 }
 
+/* ============ КЛАВИАТУРА ============ */
 document.addEventListener('keydown', (e) => {
   if (gameArea.style.display !== 'flex') return;
   switch (e.key) {
@@ -354,6 +379,7 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+/* ============ КООРДИНАТЫ ============ */
 function clientToCell(clientX, clientY) {
   const rect = mazeCanvas.getBoundingClientRect();
   const scaleX = mazeCanvas.width / rect.width;
@@ -366,152 +392,114 @@ function clientToCell(clientX, clientY) {
   };
 }
 
-function findPath(startRow, startCol, targetRow, targetCol) {
-  if (grid[targetRow][targetCol] === 1) return null;
-  const rows = grid.length, cols = grid[0].length;
-  const visited = Array.from({ length: rows }, () => Array(cols).fill(false));
-  const prev = Array.from({ length: rows }, () => Array(cols).fill(null));
-  const queue = [[startRow, startCol]];
-  visited[startRow][startCol] = true;
+/* ============ НЕОТРЫВНОЕ ВЕДЕНИЕ ТОЧКИ ============ */
+/*
+  Логика:
+  - Игрок нажимает на точку (шарик) и, не отпуская, ведёт палец/мышь.
+  - Движение происходит только когда палец входит в новую клетку.
+  - Если палец отпущен — шарик больше не двигается, тап по другим клеткам ничего не делает.
+  - Игрок может начать вести, только если при касании попал в свою текущую клетку (шарик).
+*/
 
-  const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
-  while (queue.length) {
-    const [r, c] = queue.shift();
-    if (r === targetRow && c === targetCol) {
-      const path = [];
-      let cur = [r, c];
-      while (cur) {
-        path.unshift(cur);
-        cur = prev[cur[0]][cur[1]];
+let isDraggingPlayer = false;       // сейчас ведём точку
+let lastTouchCell = { row: -1, col: -1 };
+
+function beginDragAt(clientX, clientY) {
+  const cell = clientToCell(clientX, clientY);
+  // Можно начать вести только если коснулись своей клетки
+  if (cell.row === player.row && cell.col === player.col) {
+    isDraggingPlayer = true;
+    lastTouchCell = { row: player.row, col: player.col };
+    return true;
+  }
+  return false;
+}
+
+function dragTo(clientX, clientY) {
+  if (!isDraggingPlayer || levelFinished) return;
+  const cell = clientToCell(clientX, clientY);
+
+  // Если палец вышел за пределы поля — ничего не делаем
+  if (cell.row < 0 || cell.col < 0 || cell.row >= grid.length || cell.col >= grid[0].length) return;
+
+  // Та же клетка — ничего
+  if (cell.row === player.row && cell.col === player.col) return;
+
+  // Пытаемся двигаться по одной клетке к пальцу, но только если это соседняя клетка
+  const dr = cell.row - player.row;
+  const dc = cell.col - player.col;
+
+  // Если палец ушёл далеко (быстрый свайп) — делаем шаг в сторону доминирующего направления
+  if (Math.abs(dr) > 1 || Math.abs(dc) > 1) {
+    if (Math.abs(dr) >= Math.abs(dc)) {
+      movePlayer(Math.sign(dr), 0);
+    } else {
+      movePlayer(0, Math.sign(dc));
+    }
+    return;
+  }
+
+  // Соседняя клетка — идём туда (если не стена)
+  if (dr !== 0 || dc !== 0) {
+    // предпочтение той оси, где больше смещение
+    if (Math.abs(dr) >= Math.abs(dc)) {
+      if (!movePlayer(dr, 0)) {
+        movePlayer(0, dc);
       }
-      return path;
-    }
-    for (const [dr, dc] of dirs) {
-      const nr = r + dr, nc = c + dc;
-      if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
-      if (visited[nr][nc]) continue;
-      if (grid[nr][nc] === 1) continue;
-      visited[nr][nc] = true;
-      prev[nr][nc] = [r, c];
-      queue.push([nr, nc]);
+    } else {
+      if (!movePlayer(0, dc)) {
+        movePlayer(dr, 0);
+      }
     }
   }
-  return null;
 }
 
-function walkPath(path) {
-  if (!path || path.length < 2) return;
-  let i = 1;
-  function step() {
-    if (levelFinished || i >= path.length) return;
-    const [r, c] = path[i];
-    const dr = r - player.row;
-    const dc = c - player.col;
-    movePlayer(dr, dc);
-    i++;
-    if (i < path.length && !levelFinished) {
-      setTimeout(step, 60);
-    }
-  }
-  step();
+function endDrag() {
+  isDraggingPlayer = false;
+  lastTouchCell = { row: -1, col: -1 };
 }
 
-let touchStartX = 0, touchStartY = 0;
-let lastTouchX = 0, lastTouchY = 0;
-let dragging = false;
-let movedDuringTouch = false;
-const SWIPE_THRESHOLD = 24;
-
+/* ============ TOUCH ============ */
 mazeCanvas.addEventListener('touchstart', (e) => {
   if (e.touches.length !== 1) return;
   e.preventDefault();
   const t = e.touches[0];
-  touchStartX = lastTouchX = t.clientX;
-  touchStartY = lastTouchY = t.clientY;
-  dragging = true;
-  movedDuringTouch = false;
+  beginDragAt(t.clientX, t.clientY);
 }, { passive: false });
 
 mazeCanvas.addEventListener('touchmove', (e) => {
-  if (!dragging || e.touches.length !== 1) return;
+  if (e.touches.length !== 1) return;
   e.preventDefault();
+  if (!isDraggingPlayer) return;
   const t = e.touches[0];
-  const dx = t.clientX - lastTouchX;
-  const dy = t.clientY - lastTouchY;
-
-  if (Math.abs(dx) < SWIPE_THRESHOLD && Math.abs(dy) < SWIPE_THRESHOLD) return;
-
-  movedDuringTouch = true;
-  if (Math.abs(dx) > Math.abs(dy)) {
-    movePlayer(0, dx > 0 ? 1 : -1);
-  } else {
-    movePlayer(dy > 0 ? 1 : -1, 0);
-  }
-  lastTouchX = t.clientX;
-  lastTouchY = t.clientY;
+  dragTo(t.clientX, t.clientY);
 }, { passive: false });
 
 mazeCanvas.addEventListener('touchend', (e) => {
-  if (!dragging) return;
-  dragging = false;
-  if (!movedDuringTouch) {
-    const t = e.changedTouches[0];
-    if (!t) return;
-    const cell = clientToCell(t.clientX, t.clientY);
-    if (cell.row < 0 || cell.col < 0 || cell.row >= grid.length || cell.col >= grid[0].length) return;
-    if (grid[cell.row][cell.col] === 1) return;
-    if (cell.row === player.row && cell.col === player.col) return;
-    const path = findPath(player.row, player.col, cell.row, cell.col);
-    walkPath(path);
-  }
   e.preventDefault();
+  endDrag();
 }, { passive: false });
 
 mazeCanvas.addEventListener('touchcancel', () => {
-  dragging = false;
+  endDrag();
 });
 
-let mouseDown = false;
-let mouseStartX = 0, mouseStartY = 0;
-let mouseLastX = 0, mouseLastY = 0;
-let mouseMoved = false;
-
+/* ============ МЫШЬ ============ */
 mazeCanvas.addEventListener('mousedown', (e) => {
-  mouseDown = true;
-  mouseMoved = false;
-  mouseStartX = mouseLastX = e.clientX;
-  mouseStartY = mouseLastY = e.clientY;
+  e.preventDefault();
+  beginDragAt(e.clientX, e.clientY);
 });
 
 window.addEventListener('mousemove', (e) => {
-  if (!mouseDown) return;
-  const dx = e.clientX - mouseLastX;
-  const dy = e.clientY - mouseLastY;
-  if (Math.abs(dx) < SWIPE_THRESHOLD && Math.abs(dy) < SWIPE_THRESHOLD) return;
-
-  mouseMoved = true;
-  if (Math.abs(dx) > Math.abs(dy)) {
-    movePlayer(0, dx > 0 ? 1 : -1);
-  } else {
-    movePlayer(dy > 0 ? 1 : -1, 0);
-  }
-  mouseLastX = e.clientX;
-  mouseLastY = e.clientY;
+  if (!isDraggingPlayer) return;
+  dragTo(e.clientX, e.clientY);
 });
 
-window.addEventListener('mouseup', (e) => {
-  if (!mouseDown) return;
-  mouseDown = false;
-  if (!mouseMoved) {
-    const cell = clientToCell(e.clientX, e.clientY);
-    if (cell.row < 0 || cell.col < 0 || cell.row >= grid.length || cell.col >= grid[0].length) return;
-    if (grid[cell.row][cell.col] === 1) return;
-    if (cell.row === player.row && cell.col === player.col) return;
-    const path = findPath(player.row, player.col, cell.row, cell.col);
-    walkPath(path);
-  }
+window.addEventListener('mouseup', () => {
+  endDrag();
 });
 
+/* ============ СТАРТ ============ */
 function startGame() {
   startScreen.style.display = 'none';
   gameArea.style.display = 'flex';
@@ -525,6 +513,7 @@ redButton.addEventListener('touchstart', (e) => {
   startGame();
 }, { passive: false });
 
+/* ============ СКРИМЕР ============ */
 function showScreamer() {
   gameArea.style.display = 'none';
   startScreen.style.display = 'none';
@@ -543,12 +532,14 @@ function showScreamer() {
   }, 5000);
 }
 
+/* ============ РЕСАЙЗ ============ */
 window.addEventListener('resize', () => {
   if (gameArea.style.display === 'flex' && !levelFinished) {
     loadLevel(currentLevel);
   }
 });
 
+/* ============ ЗАЩИТА ОТ ЖЕСТОВ ============ */
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('contextmenu', (e) => {
   if (e.target === mazeCanvas) e.preventDefault();
