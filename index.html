@@ -319,19 +319,10 @@ function drawPlayer(x, y) {
   const radius = cellSize * 0.38;
   mazeCtx.beginPath();
   mazeCtx.arc(cx, cy, radius, 0, Math.PI * 2);
-  const grad = mazeCtx.createRadialGradient(cx - radius*0.3, cy - radius*0.3, radius*0.1, cx, cy, radius);
-  grad.addColorStop(0, '#ff6666');
-  grad.addColorStop(1, '#aa0000');
-  mazeCtx.fillStyle = grad;
-  mazeCtx.shadowColor = '#ff0000';
-  mazeCtx.shadowBlur = 15;
+  mazeCtx.fillStyle = '#ff0000';
   mazeCtx.fill();
-  mazeCtx.shadowBlur = 0;
 }
 
-/* ============ ДВИЖЕНИЕ ШАРИКА ============ */
-/* ВАЖНО: двигаемся ТОЛЬКО по вызову из drag-обработчиков.
-   Никаких кликов по клеткам, никакого BFS/автопути. */
 function movePlayer(dr, dc) {
   if (levelFinished) return false;
   const nr = player.row + dr;
